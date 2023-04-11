@@ -9,6 +9,8 @@
         "__sapper__/*",
         "public/*"
     ],
-    "outDir": "dist",
+    "compilerOptions": {
+        "outDir": "dist"
+    },
     "declaration": true
 }
