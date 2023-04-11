@@ -1,0 +1,26 @@
+{
+  "name": "maloon",
+  "version": "0.0.0",
+  "description": "Create Svelte SPAs easily & ship less javascript 💨",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/greencoder001/maloon.git"
+  },
+  "keywords": [
+    "maloon",
+    "svelte",
+    "spa",
+    "router",
+    "spa-router"
+  ],
+  "author": "greencoder001 <greencoder001@outlook.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/greencoder001/maloon/issues"
+  },
+  "homepage": "https://github.com/greencoder001/maloon#readme"
+}
