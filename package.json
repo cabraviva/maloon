@@ -2,13 +2,22 @@
   "name": "maloon",
   "version": "0.0.0",
   "description": "Create Svelte SPAs easily & ship less javascript 💨",
-  "main": "index.js",
+  "svelte": "src/index.js",
+  "module": "dist/index.mjs",
+  "main": "dist/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "rollup -c",
+    "prepublishOnly": "npm run build"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/greencoder001/maloon.git"
+  },
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^9.0.0",
+    "rollup": "^2.0.0",
+    "rollup-plugin-svelte": "^7.0.0",
+    "svelte": "^3.5.0"
   },
   "keywords": [
     "maloon",
@@ -22,5 +31,9 @@
   "bugs": {
     "url": "https://github.com/greencoder001/maloon/issues"
   },
-  "homepage": "https://github.com/greencoder001/maloon#readme"
+  "homepage": "https://github.com/greencoder001/maloon#readme",
+  "files": [
+    "src",
+    "dist"
+  ]
 }
