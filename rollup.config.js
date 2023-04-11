@@ -5,16 +5,19 @@ import typescript from '@rollup/plugin-typescript';
 
 export default {
 	input: 'src/index.ts',
-	output: [
-		{ file: 'dist/index.es', 'format': 'es' }
-	],
+	output: {
+		sourcemap: true,
+		format: 'es',
+		file: 'dist/index.js'
+	},
 	plugins: [
 		svelte({
 			preprocess: autoPreprocess()
 		}),
 		typescript({
 			declaration: true,
-			outDir: 'dist'
+			outDir: 'dist',
+			types: ['svelte']
 		}),
 		resolve()
 	]
