@@ -3,11 +3,11 @@
   "version": "0.7.0",
   "description": "Create Svelte SPAs easily & ship less javascript 💨",
   "svelte": "src/index.ts",
-  "main": "src/index.ts",
+  "main": "dist/index.jss",
   "type": "module",
-  "types": "src/index.d.ts",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "build": "rollup -c && node _helper-build.cjs",
+    "build": "rollup -c",
     "prepublishOnly": "npm run build"
   },
   "repository": {
