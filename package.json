@@ -4,7 +4,8 @@
   "description": "Create Svelte SPAs easily & ship less javascript 💨",
   "svelte": "src/index.ts",
   "module": "dist/index.mjs",
-  "main": "dist/index.js",
+  "main": "dist/index.mjs",
+  "type": "module",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "rollup -c",
