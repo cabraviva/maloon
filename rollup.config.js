@@ -20,7 +20,8 @@ export default {
 			preprocess: autoPreprocess()
 		}),
 		typescript({
-			sourceMap: true
+			declaration: true,
+			outDir: 'dist'
 		}),
 		resolve()
 	]

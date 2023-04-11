@@ -9,4 +9,6 @@
         "__sapper__/*",
         "public/*"
     ],
+    "outDir": "dist",
+    "declaration": true
 }
