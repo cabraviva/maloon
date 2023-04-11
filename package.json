@@ -1,6 +1,6 @@
 {
   "name": "maloon",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Create Svelte SPAs easily & ship less javascript 💨",
   "svelte": "src/index.ts",
   "module": "dist/index.mjs",
