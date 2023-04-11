@@ -1,8 +1,15 @@
-import Component from './Component.svelte'
+type PageDefinition = {
+    pages: {
+        [key: string]: string
+    },
+    main?: string
+    current?: string
+}
 
-export const MaloonTest = Component
-export class Maloon {
-    constructor (testarg: string) {
-        console.log(testarg)
-    }
+/**
+ * Use this function to provide all pages used on the current page, so maloon knows
+   which pages should be prefixed
+ */
+export function definePages (pages: PageDefinition | string[]): void {
+    console.log('No functionality yet...')
 }
