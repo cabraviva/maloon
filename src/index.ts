@@ -8,10 +8,21 @@ declare global {
             currentPage: string,
             lastRouteFetchSucessful: boolean,
             popStateListenerInitialized: boolean,
-            provideHint(url: string): Promise<boolean>
+            provideHint(url: string): Promise<boolean>,
+            state: {
+                [key: string]: StateCompatible
+            },
+            icbop: boolean,
+            getPageName(): string
         }
     }
 }
+
+type StateCompatibleObject = {
+    [key: string]: StateCompatible
+}
+type StateCompatible = string | null | number | boolean | StateCompatible[] | StateCompatibleObject
+
 
 if (!window.__maloon__) {
     // @ts-ignore
@@ -20,8 +31,22 @@ if (!window.__maloon__) {
         mainPage: 'index',
         lastRouteFetchSucessful: true,
         popStateListenerInitialized: false,
+        state: {},
+        icbop: false,
         async provideHint (url: string) {
             return await prefetchPage(url, url)
+        },
+        getPageName () {
+            let name = 'index'
+            if (window.__maloon__.currentPage) {
+                if (name === 'index') name = window.location.pathname
+                if (determineCurrentPageBasedOnURLNoDefIndex(window.__maloon__.fetchedPages) === 'index') name = 'index'
+            } else {
+                name = determineCurrentPageBasedOnURL(window.__maloon__.fetchedPages)
+                if (name === 'index') name = window.location.pathname
+                if (determineCurrentPageBasedOnURLNoDefIndex(window.__maloon__.fetchedPages) === 'index') name = 'index'
+            }
+            return name
         }
     }
 }
@@ -340,6 +365,15 @@ export function definePages (pages: PageDefinition | string[]): void {
         })
     }
 
+    if (window.localStorage.getItem('__maloon_icbop__') === 'true') {
+        window.localStorage.removeItem('__maloon_icbop__')
+        window.__maloon__.icbop = true
+    } else {
+        window.__maloon__.icbop = false
+    }
+
+    loadState()
+
     if (pages instanceof Array) {
         // Simple definePages
         const pagesObject = {}
@@ -572,8 +606,59 @@ export async function freshNavigate(urlOrPageName: string, queryString?: string)
     }
 }
 
-export async function open(urlOrPageName: string, queryString?: string) {
-    // TODO: Functionality
+/**
+ * Opens a page in a new tab
+ * @param urlOrPageName Pagename / URL to open
+ * @param queryString Query string to use (Supported but not recommended)
+ * @returns {PageInfo} Page() return value of the opened page
+ */
+export function open(urlOrPageName: string, queryString?: string): PageInfo {
+    window.localStorage.setItem('__maloon_icbop__', 'true')
+    saveState()
+    let url = urlOrPageName
+    if (urlOrPageName.startsWith('http') || urlOrPageName.startsWith(':') || urlOrPageName.startsWith('//')) {
+        // External site
+        url = urlOrPageName
+    } else {
+        // Internal site
+        queryString ||= ''
+        // Main Page
+        if (urlOrPageName === '' || urlOrPageName === '/') url = window.__maloon__.mainPage
+
+        if (urlOrPageName in window.__maloon__.fetchedPages) {
+            url = window.__maloon__.fetchedPages[urlOrPageName].url || urlOrPageName
+        }
+
+        if (!url.startsWith('/')) url = `/${url}`
+    }
+
+    const page = window.open(url)
+
+    let name: string
+    try {
+        name = page.__maloon__.getPageName()
+    } catch {
+        name = url
+    }
+
+    return {
+        close () {
+            page.close()
+        },
+        isControlledByOtherPage () {
+            return true
+        },
+        refresh () {
+            page.location = url
+        },
+        name,
+        back () {
+            page.history.back()
+        },
+        forward () {
+            page.history.forward()
+        }
+    }
 }
 
 interface PageInfo {
@@ -602,11 +687,12 @@ interface PageInfo {
     forward(): void
 }
 
+window.__maloon__.getPageName()
+
 /**
  * Returns information and methods regarding the current page
  */
 export function Page (): PageInfo {
-    // TODO: Functionality
     let name = 'index'
     if (window.__maloon__.currentPage) {
         if (name === 'index') name = window.location.pathname
@@ -620,10 +706,11 @@ export function Page (): PageInfo {
         close() {
             if (Page().isControlledByOtherPage()) {
                 // Close page
+                window.close()
             }
         },
         isControlledByOtherPage() {
-            return false
+            return window.__maloon__.icbop
         },
         refresh() {
             // @ts-expect-error
@@ -637,4 +724,59 @@ export function Page (): PageInfo {
             window.history.forward()
         }
     }
+}
+
+/**
+ * Saves current state so that it can be recovered on reload. 
+ * NOTE: This is done automatically when using open() or navigating to an external page.
+ * NOTE2: State will only be saved for the current browser session
+ */
+export function saveState () {
+    const serialized = JSON.stringify(window.__maloon__.state)
+    localStorage.setItem('__maloon_state__', serialized)
+}
+
+/**
+ * Loads stored state.
+ * NOTE: This will be done automatically when using definePages()
+ */
+export function loadState () {
+    const storage = window.localStorage.getItem('__maloon_state__')
+    if (typeof storage === 'string') {
+        const parsed = JSON.parse(storage)
+        window.__maloon__.state = parsed
+        clearSavedState()
+    }
+}
+
+function clearSavedState () {
+    window.localStorage.removeItem('__maloon_state__')
+}
+
+/**
+ * Stores a value in the state
+ * @param key Key for the data
+ * @param value Whatever you want to save. Just make sure it's JSON serializabile
+ * @example setState('key', 'value')
+ */
+export function setState(key: string | number, value: StateCompatible) {
+    if (value === undefined) value = null
+    window.__maloon__.state[key.toString()] = value
+}
+
+/**
+ * Retrieves some data from the state
+ * @param key Key for the data
+ * @returns {StateCompatible} Anything that is JSON serializable
+ * @example getState('key')
+ */
+export function getState (key: string | number): StateCompatible {
+    return window.__maloon__.state[key.toString()]
+}
+
+export const state = {
+    get: getState,
+    set: setState,
+    save: saveState,
+    load: loadState
 }
