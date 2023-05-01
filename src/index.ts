@@ -54,7 +54,7 @@ interface RegisteredRoute {
     contentFunc: Function,
     path: string,
     name: string,
-    content?: SvelteComponent
+    content?: any
 }
 
 function registerRoute (content: Function, path: string, name: string): void {
@@ -85,7 +85,6 @@ import Page from './Page.svelte'
 import NotFound from './NotFound.svelte'
 import Prelaod from './Preload.svelte'
 import Depends from './Depends.svelte'
-import type { SvelteComponent } from 'svelte'
 import Default404Page from './Default404Page.svelte'
 
 function goToNonSameOriginPage (url: string) {
@@ -334,23 +333,28 @@ const initialPageLoadHandler = async () => {
             // Load 404 page
             if (typeof window.__maloon__.notFoundRoute === 'function') {
                 registerRoute(window.__maloon__.notFoundRoute, '/__404__', '__404__')
+                const content = (await window.__maloon__.notFoundRoute()).default
+                window.__maloon__['/__404__'].content = content
                 await accessLocalPage({
                     contentFunc: window.__maloon__.notFoundRoute,
+                    content,
                     name: '__404__',
                     path: '/__404__'
-                }, true)
+                }, false)
             } else {
                 // Load default 404 page
                 registerRoute(() => {
                     return Default404Page
                 }, '/__404__', '__404__')
+                window.__maloon__['/__404__'].content = Default404Page
                 await accessLocalPage({
                     contentFunc: () => {
                         return Default404Page
                     },
+                    content: Default404Page,
                     name: '__404__',
                     path: '/__404__'
-                }, true)
+                }, false)
             }
         }
     }
