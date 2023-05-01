@@ -13,7 +13,11 @@ declare global {
                 [key: string]: StateCompatible
             },
             icbop: boolean,
-            getPageName(): string
+            getPageName(): string,
+            navigate(uop: string): Promise<void>,
+            open(uop: string): PageInfoO,
+            freshNavigate(uop: string): Promise<void>,
+            getPageObj(): PageInfo
         }
     }
 }
@@ -47,6 +51,18 @@ if (!window.__maloon__) {
                 if (determineCurrentPageBasedOnURLNoDefIndex(window.__maloon__.fetchedPages) === 'index') name = 'index'
             }
             return name
+        },
+        navigate (uop: string) {
+            return navigate(uop)
+        },
+        getPageObj() {
+            return Page()
+        },
+        open(uop: string) {
+            return open(uop)
+        },
+        freshNavigate (uop: string) {
+            return freshNavigate(uop)
         }
     }
 }
@@ -606,13 +622,21 @@ export async function freshNavigate(urlOrPageName: string, queryString?: string)
     }
 }
 
+interface PageInfoO extends PageInfo {
+    /**
+     * Registers an event handler waiting for the page to close
+     * @param handler The event handler function
+     */
+    onclose (handler: Function): void
+}
+
 /**
  * Opens a page in a new tab
  * @param urlOrPageName Pagename / URL to open
  * @param queryString Query string to use (Supported but not recommended)
  * @returns {PageInfo} Page() return value of the opened page
  */
-export function open(urlOrPageName: string, queryString?: string): PageInfo {
+export function open(urlOrPageName: string, queryString?: string): PageInfoO {
     window.localStorage.setItem('__maloon_icbop__', 'true')
     saveState()
     let url = urlOrPageName
@@ -633,6 +657,17 @@ export function open(urlOrPageName: string, queryString?: string): PageInfo {
     }
 
     const page = window.open(url)
+    let wclosedhandlers = []
+
+    const timer = setInterval(() => {
+        if (page.closed) {
+            clearInterval(timer)
+            for (const h of wclosedhandlers) {
+                h()
+            }
+            wclosedhandlers = []
+        }
+    }, 500)
 
     let name: string
     try {
@@ -657,6 +692,9 @@ export function open(urlOrPageName: string, queryString?: string): PageInfo {
         },
         forward () {
             page.history.forward()
+        },
+        onclose(handler: Function) {
+            wclosedhandlers.push(handler)
         }
     }
 }
@@ -779,4 +817,29 @@ export const state = {
     set: setState,
     save: saveState,
     load: loadState
+}
+
+/**
+* Navigates one step back. If not possible, silently does nothing
+*/
+export function goBack () {
+    Page().back()
+}
+
+/**
+* Navigates one step forward. If not possible, silently does nothing
+*/
+export function goForward () {
+    Page().forward()
+}
+
+// Components
+import Link from './components/Link.svelte'
+import BackBtn from './components/BackBtn.svelte'
+import ForwardBtn from './components/ForwardBtn.svelte'
+
+export {
+    Link, 
+    BackBtn,
+    ForwardBtn
 }
