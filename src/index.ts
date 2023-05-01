@@ -1,721 +1,202 @@
+// @ts-ignore
+import { wantsToSaveData, resolvePageObject, resolveQueryString, wasPagePrefetched, type ParsedQueryString, parseQueryString } from './utils.ts'
+
 declare global {
     interface Window {
         __maloon__: {
-            fetchedPages: {
-                [key: string]: any
+            CurrentPageComponent: SvelteComponent | null,
+            registerRoute(content: Function, path: string, name: string): void,
+            routes: {
+                [key: string]: RegisteredRoute
             },
-            mainPage: string,
-            currentPage: string,
-            lastRouteFetchSucessful: boolean,
-            popStateListenerInitialized: boolean,
-            provideHint(url: string): Promise<boolean>,
+            notFoundRoute?: Function,
+            /**
+             * Preloads a registered route
+             */
+            lpc(pageNameOrPath: string): Promise<void>,
+            wantsToSaveData(): boolean,
+            pagename: string,
+            pagepath: string,
+            popstateListenerInitialized: boolean,
+            firstPageLoad: boolean,
+            icbop: boolean,
             state: {
                 [key: string]: StateCompatible
             },
-            icbop: boolean,
-            getPageName(): string,
-            navigate(uop: string): Promise<void>,
-            open(uop: string): PageInfoO,
-            freshNavigate(uop: string): Promise<void>,
-            getPageObj(): PageInfo
+            routerInitialized(): void
         }
     }
 }
-
-type StateCompatibleObject = {
-    [key: string]: StateCompatible
-}
-type StateCompatible = string | null | number | boolean | StateCompatible[] | StateCompatibleObject
-
 
 if (!window.__maloon__) {
-    // @ts-ignore
     window.__maloon__ = {
-        fetchedPages: {},
-        mainPage: 'index',
-        lastRouteFetchSucessful: true,
-        popStateListenerInitialized: false,
-        state: {},
+        CurrentPageComponent: null,
+        registerRoute,
+        routes: {},
+        lpc: loadPageComponent,
+        wantsToSaveData,
+        pagename: null,
+        pagepath: null,
+        popstateListenerInitialized: false,
+        firstPageLoad: true,
         icbop: false,
-        async provideHint (url: string) {
-            return await prefetchPage(url, url)
-        },
-        getPageName () {
-            let name = 'index'
-            if (window.__maloon__.currentPage) {
-                if (name === 'index') name = window.location.pathname
-                if (determineCurrentPageBasedOnURLNoDefIndex(window.__maloon__.fetchedPages) === 'index') name = 'index'
-            } else {
-                name = determineCurrentPageBasedOnURL(window.__maloon__.fetchedPages)
-                if (name === 'index') name = window.location.pathname
-                if (determineCurrentPageBasedOnURLNoDefIndex(window.__maloon__.fetchedPages) === 'index') name = 'index'
-            }
-            return name
-        },
-        navigate (uop: string) {
-            return navigate(uop)
-        },
-        getPageObj() {
-            return Page()
-        },
-        open(uop: string) {
-            return open(uop)
-        },
-        freshNavigate (uop: string) {
-            return freshNavigate(uop)
+        state: {},
+        routerInitialized() {
+            loadState()
+            onPageLoad()
+            initialPageLoadHandler()
         }
     }
 }
 
-type PageDefinition = {
-    /**
-     * Pages object including all pages that might have , should be structured like this
-     */
-    pages: {
-        [key: string]: string
-    },
-    /**
-     * Page that should be used when path is '/'
-     * @default 'index'
-     */
-    main?: string
-    /**
-     * Current page. If ommited maloon will try to retrieve it from the url.
-     * If that isn't possible it will default to 'index'
-     * @default 'index'
-     */
-    current?: string
+interface RegisteredRoute {
+    contentFunc: Function,
+    path: string,
+    name: string,
+    content?: SvelteComponent
 }
 
-function determineCurrentPageBasedOnURL (pages: object) {
-    if (typeof pages[window.location.pathname.substring(1)] === 'string') {
-        // Found one
-        return window.location.pathname.substring(1)
-    } else {
-        const matchingPages = Object.entries(pages).filter(entry => entry[1] === window.location.pathname)
-        if (matchingPages.length > 0) {
-            // Found matching page
-            return matchingPages[0][0]
-        } else {
-            return 'index'
-        }
+function registerRoute (content: Function, path: string, name: string): void {
+    window.__maloon__.routes[path] = {
+        contentFunc: content,
+        path,
+        name,
     }
 }
 
-function determineCurrentPageBasedOnURLNoDefIndex(pages: object) {
-    if (typeof pages[window.location.pathname.substring(1)] === 'string') {
-        // Found one
-        return window.location.pathname.substring(1)
-    } else {
-        const matchingPages = Object.entries(pages).filter(entry => entry[1] === window.location.pathname)
-        if (matchingPages.length > 0) {
-            // Found matching page
-            return matchingPages[0][0]
-        } else {
-            return null
-        }
+async function loadPageComponent (nameOrPath: string): Promise<void> {
+    const rr = resolvePageObject(nameOrPath)
+    if (!rr) throw new Error('Couldn\'t find a registered page with the name or path of ' + nameOrPath)
+   
+    const content = await rr.contentFunc()
+
+    window.__maloon__.routes[rr.path] = {
+        name: rr.name,
+        path: rr.path,
+        contentFunc: rr.contentFunc,
+        content
     }
 }
 
-function funcToDataUrl (func: Function, data?: any[]) {
-    if (!(data instanceof Array)) data = []
-    const functionString = `"use strict";\n;(${func})(${data.map(e => {
-        if (typeof e === 'function') {
-            return `(${e})`
-        } else {
-            return JSON.stringify(e)
-        }
-    }).join(', ')});`
-    const url = `data:text/javascript;base64,${btoa(unescape(encodeURIComponent(functionString)))}`
-    return url
-}
+import Router from './Router.svelte'
+import Route from './Route.svelte'
+import Page from './Page.svelte'
+import NotFound from './NotFound.svelte'
+import Prelaod from './Preload.svelte'
+import Depends from './Depends.svelte'
+import type { SvelteComponent } from 'svelte'
+import Default404Page from './Default404Page.svelte'
 
-function getAttributesOfAllTags(html: string, tagName: string): { [key: string]: string; _content: string }[] {
-    const attributeList: { [key: string]: string; _content: string }[] = []
-    let startIndex = 0
-    let endIndex = 0
-
-    while (true) {
-        startIndex = html.indexOf(`<${tagName}`, endIndex)
-        endIndex = html.indexOf(`>`, startIndex)
-
-        if (startIndex === -1 || endIndex === -1) {
-            break
-        }
-
-        const tag = html.substring(startIndex, endIndex)
-        // @ts-expect-error: Not anymore
-        const attributes: { [key: string]: string; _content: string } = tag
-            .match(/([^\s=]+)(="([^"]*)")?/g)
-            .reduce((acc, attribute) => {
-                const [name, value] = attribute.split('=')
-                acc[name] = value ? value.replace(/"/g, '') : ''
-                return acc
-            }, {})
-
-        attributes._content = html.substring(endIndex + 1, html.indexOf(`</${tagName}>`, endIndex)).replace(/\\r\\n/g, '\n').trim()
-
-        attributeList.push(attributes)
-
-        endIndex += 1
-    }
-
-    return attributeList
-}
-
-function retrieveInnerOfTag (html: string, tagName: string) {
-    const startIndex = html.indexOf(`<${tagName}>`)
-    const endIndex = html.indexOf(`</${tagName}>`)
-
-    return html.substring(startIndex + `<${tagName}>`.length, endIndex).replace(/\\r\\n/g, '\n').trim()
-}
-
-function retrieveInnerOfAllTags(html: string, tagName: string) {
-    const innerHtmlList = []
-    let startIndex = 0
-    let endIndex = 0
-
-    while (true) {
-        startIndex = html.indexOf(`<${tagName}>`, endIndex)
-        endIndex = html.indexOf(`</${tagName}>`, startIndex)
-
-        if (startIndex === -1 || endIndex === -1) {
-            break
-        }
-
-        const innerHtml = retrieveInnerOfTag(html, tagName)
-        innerHtmlList.push(innerHtml)
-
-        html = html.substring(0, startIndex) + html.substring(endIndex + `</${tagName}>`.length)
-        endIndex = startIndex
-    }
-
-    return innerHtmlList
-}
-
-function removeEveryTag(html: string, tagName: string): string {
-    let startIndex = 0
-    let endIndex = 0
-    let result = ''
-
-    while ((startIndex = html.indexOf(`<${tagName}`, endIndex)) !== -1) {
-        result += html.substring(endIndex, startIndex)
-        endIndex = html.indexOf(`</${tagName}>`, startIndex) + `</${tagName}>`.length
-    }
-
-    result += html.substring(endIndex)
-
-    return result
-}
-
-async function fetchPage (url: string, origin = '', retrieveInnerOfTag: Function, retrieveInnerOfAllTags: Function, getAttributesOfAllTags: Function, removeEveryTag: Function) {
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest()
-
-        xhr.addEventListener('load', function () {
-            if (xhr.status.toString().startsWith('2')) {
-                let title: string = ''
-                
-                let head = retrieveInnerOfTag(xhr.responseText.replace(/\r/g, ''), 'head')
-                let body = retrieveInnerOfTag(xhr.responseText.replace(/\r/g, ''), 'body')
-
-                const innerTitle = retrieveInnerOfTag(head, 'title')
-                if (innerTitle) {
-                    title = innerTitle
-                }
-                
-                const headScriptTags: object[] = getAttributesOfAllTags(head, 'script')
-                head = removeEveryTag(head, 'script')
-
-                type Preloadable = {
-                    url: string,
-                    type: string
-                }
-
-                let preloadableURLs: Preloadable[] = []
-                getAttributesOfAllTags(head, 'link').forEach((element: { [key: string]: string }) => {
-                    if (element.href) {
-                        preloadableURLs.push({
-                            url: element.href,
-                            type: element.rel
-                        })
-                    }
-                })
-
-                let headContent = head
-
-                let bodyScriptTags: object[] = getAttributesOfAllTags(body, 'script')
-                body = removeEveryTag(body, 'script')
-
-                let bodyContent = body
-                
-                try {
-                    window.__maloon__.lastRouteFetchSucessful = true
-                } catch {
-                    postMessage('SET_LRFS=1')
-                }
-
-                resolve({
-                    pageContent: xhr.responseText.replace(/\r/g, '').trim(),
-                    title,
-                    head,
-                    body,
-                    headContent,
-                    headScriptTags,
-                    bodyContent,
-                    bodyScriptTags,
-                    preloadableURLs
-                })
-            } else {
-                try {
-                    window.__maloon__.lastRouteFetchSucessful = false
-                } catch {
-                    postMessage('SET_LRFS=0')
-                }
-                resolve({})
-            }
-        })
-
-        xhr.addEventListener('error', (err) => {
-            reject(err)
-        })
-
-        if (!(url.startsWith('http') || url.startsWith(':') || url.startsWith('//'))) url = origin + url
-
-        xhr.open('GET', url)
-        xhr.send()
-    })
-}
-
-function watchForMaloonHints () {
-    if (typeof (IntersectionObserver) !== "undefined" && !wantsToSaveData()) {
-        let elementsWithHint = document.querySelectorAll('*[maloonhint]')
-        for (const ewh of elementsWithHint) {
-            if (ewh.getAttribute('data-maloon-is-observed') !== 'true') {
-                ewh.setAttribute('data-maloon-is-observed', 'true')
-                const observer = new IntersectionObserver((entries) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting) {
-                            observer.unobserve(ewh)
-                            prefetchPage(entry.target.getAttribute('maloonhint'), entry.target.getAttribute('maloonhint'))
-                        }
-                    })
-                })
-                observer.observe(ewh)
-            }
-        }
-
-        elementsWithHint = document.querySelectorAll('*[data-maloonhint]')
-        for (const ewh of elementsWithHint) {
-            if (ewh.getAttribute('data-maloon-is-observed') !== 'true') {
-                ewh.setAttribute('data-maloon-is-observed', 'true')
-                const observer = new IntersectionObserver((entries) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting) {
-                            observer.unobserve(ewh)
-                            prefetchPage(entry.target.getAttribute('data-maloonhint'), entry.target.getAttribute('data-maloonhint'))
-                        }
-                    })
-                })
-                observer.observe(ewh)
-            }
-        }
-    }
-}
-
-async function prefetchPage (url: string, pageName?: string): Promise<boolean> {
-    return new Promise(resolve => {
-        if (!(url.startsWith('http') || url.startsWith(':') || url.startsWith('/'))) {
-            url = `/${url}`
-        }
-        if (typeof (Worker) !== "undefined") {
-            const worker = new Worker(funcToDataUrl(async function (url: string, pageName: string, fetchPage: Function, origin: string, retrieveInnerOfTag: Function, retrieveInnerOfAllTags: Function, getAttributesOfAllTags: Function, removeEveryTag: Function) {
-                // We are inside of a seperate thread 👍
-                const fetchedPages = {}
-                fetchedPages[pageName] = {
-                    url,
-                    fetched: await fetchPage(url, origin, retrieveInnerOfTag, retrieveInnerOfAllTags, getAttributesOfAllTags, removeEveryTag)
-                }
-                postMessage(fetchedPages)
-            }, [
-                url,
-                pageName ?? url,
-                fetchPage,
-                window.location.origin,
-                retrieveInnerOfTag,
-                retrieveInnerOfAllTags,
-                getAttributesOfAllTags,
-                removeEveryTag
-            ]))
-            worker.onmessage = ({ data: fetchedPages }) => {
-                if (fetchedPages === 'SET_LRFS=1') {
-                    window.__maloon__.lastRouteFetchSucessful = true
-                    return
-                }
-                if (fetchedPages === 'SET_LRFS=0') {
-                    window.__maloon__.lastRouteFetchSucessful = false
-                    return
-                }
-
-                // Prefetched all pages
-                worker.terminate()
-                window.__maloon__.fetchedPages = {
-                    ...window.__maloon__.fetchedPages,
-                    ...fetchedPages
-                }
-
-                resolve(true)
-
-                // Prefetch resources (e.g. styles)
-                for (const page of Object.values(fetchedPages)) {
-                    // @ts-expect-error
-                    for (const resource of page.fetched.preloadableURLs) {
-                        const link = document.createElement('link')
-                        link.rel = 'prefetch'
-                        link.href = resource.url
-                        link.as = resource.type
-                        document.head.appendChild(link)
-                    }
-                }
-            }
-        }
-    })
-}
-
-/**
- * Use this function to provide all pages used on the current page, so maloon knows
-   which pages should be prefixed
- */
-export function definePages (pages: PageDefinition | string[]): void {
-    setTimeout(() => watchForMaloonHints(), 50)
-    setTimeout(() => watchForMaloonHints(), 1500)
-
-    if (!window.__maloon__.popStateListenerInitialized) {
-        window.__maloon__.popStateListenerInitialized = true
-        window.addEventListener('popstate', () => {
-            loadLocalPage(window.location.pathname, '', true)
-        })
-    }
-
-    if (window.localStorage.getItem('__maloon_icbop__') === 'true') {
-        window.localStorage.removeItem('__maloon_icbop__')
-        window.__maloon__.icbop = true
-    } else {
-        window.__maloon__.icbop = false
-    }
-
-    loadState()
-
-    if (pages instanceof Array) {
-        // Simple definePages
-        const pagesObject = {}
-        for (const page of pages) {
-            pagesObject[page] = `/${page}`
-        }
-
-        pages = {
-            pages: pagesObject,
-            main: 'index',
-            current: determineCurrentPageBasedOnURL(pagesObject)
-        }
-    }
-    pages.current ||= determineCurrentPageBasedOnURL(pages.pages)
-    pages.main ||= 'index'
-    window.__maloon__.mainPage = pages.main
-    window.__maloon__.currentPage = pages.current
-
-    // Start prefetching them
-    const entr = {}
-    for (const pn of Object.keys(pages.pages)) {
-        entr[pn] = {}
-    }
-
-    window.__maloon__.fetchedPages = {
-        ...window.__maloon__.fetchedPages,
-        ...entr
-    }
-    if (typeof (Worker) !== "undefined" && !wantsToSaveData()) {
-        const worker = new Worker(funcToDataUrl(async function (pages: PageDefinition, fetchPage: Function, origin: string, retrieveInnerOfTag: Function, retrieveInnerOfAllTags: Function, getAttributesOfAllTags: Function, removeEveryTag: Function) {
-            // We are inside of a seperate thread 👍
-            const fetchedPages = {}
-            for (const [pageName, url] of Object.entries(pages.pages)) {
-                if (pageName !== pages.current) {
-                    fetchedPages[pageName] = {
-                        url,
-                        fetched: await fetchPage(url, origin, retrieveInnerOfTag, retrieveInnerOfAllTags, getAttributesOfAllTags, removeEveryTag)
-                    }
-                }
-            }
-            postMessage(fetchedPages)
-        }, [
-            pages,
-            fetchPage,
-            window.location.origin,
-            retrieveInnerOfTag,
-            retrieveInnerOfAllTags,
-            getAttributesOfAllTags,
-            removeEveryTag
-        ]))
-        worker.onmessage = ({ data: fetchedPages }) => {
-            if (fetchedPages === 'SET_LRFS=1') {
-                window.__maloon__.lastRouteFetchSucessful = true
-                return
-            }
-            if (fetchedPages === 'SET_LRFS=0') {
-                window.__maloon__.lastRouteFetchSucessful = false
-                return
-            }
-            // Prefetched all pages
-            worker.terminate()
-            window.__maloon__.fetchedPages = {
-                ...window.__maloon__.fetchedPages,
-                ...fetchedPages
-            }
-
-            // Prefetch resources (e.g. styles)
-            for (const page of Object.values(fetchedPages)) {
-                // @ts-expect-error
-                for (const resource of page.fetched.preloadableURLs) {
-                    const link = document.createElement('link')
-                    link.rel = 'prefetch'
-                    link.href = resource.url
-                    link.as = resource.type
-                    document.head.appendChild(link)
-                }
-            }
-        }
-    }
-    // No Web Worker support...
-    // Won't prefetch any pages then
-}
-
-function dispatchDomReady () {
-    return window.dispatchEvent(new Event("DOMContentLoaded"))
-}
-
-function wantsToSaveData() {
-    if ('connection' in navigator) {
-        // @ts-expect-error
-        if (navigator.connection.saveData) {
-            return true
-        } else {
-            return false
-        }
-    } else {
-        return false
-    }
-}
-
-function loadActualPageBasedOnData (data: {[key: string]: any}, queryString?: string, keepHistory = false) {
-    const { fetched } = data
-    data.url = data.url + (queryString || '')
-    if (!keepHistory) {
-        window.history.pushState({
-            pathname: data.pathname || data.url || undefined
-        }, '', data.url)
-    }
-    document.querySelector('title').innerText = fetched.title
-    document.querySelector('head').innerHTML = fetched.headContent
-    document.querySelector('body').innerHTML = fetched.bodyContent
-    for (const hst of fetched.headScriptTags) {
-        const tag = document.createElement('script')
-        if (hst.src) tag.src = hst.src
-        tag.innerHTML = hst._content || ''
-        tag.noModule = hst.nomodule
-        tag.type = hst.type
-        tag.defer = hst.defer || false
-        document.head.appendChild(tag)
-    }
-    for (const bst of fetched.bodyScriptTags) {
-        const tag = document.createElement('script')
-        if (bst.src) tag.src = bst.src
-        tag.innerHTML = bst._content || ''
-        tag.noModule = bst.nomodule
-        tag.type = bst.type
-        tag.defer = bst.defer || false
-        document.body.appendChild(tag)
-    }
-    dispatchDomReady()
-}
-
-async function loadLocalPage (urlOrPageName: string, queryString: string, keepHistory = false) {
-    if (urlOrPageName.startsWith('http') || urlOrPageName.startsWith(':') || urlOrPageName.startsWith('//')) {
-        // External site
-        // @ts-expect-error
-        window.location = urlOrPageName
-    }
-    
-    let pageData: {[key:string]: any} = {}
-
-    // Main Page
-    if (urlOrPageName === '' || urlOrPageName === '/') urlOrPageName = window.__maloon__.mainPage
-    
-    window.__maloon__.currentPage = urlOrPageName
-    
-    // Check if pageName is prefetched 
-    if (urlOrPageName in window.__maloon__.fetchedPages) {
-        pageData = window.__maloon__.fetchedPages[urlOrPageName]
-    } else {
-        // Check if some prefetched page has a matching url
-        for (const data of Object.values(window.__maloon__.fetchedPages)) {
-            if (data.url === urlOrPageName) {
-                pageData = data
-            }
-        }
-    }
-
-    if (!pageData.url) {
-        // Page not prefetched, doing now...
-        try {
-            await prefetchPage(urlOrPageName)
-        } catch {
-            // Fallback: Normal page load
-            // @ts-expect-error
-            window.location = `${window.location.origin}${pageData.url || (urlOrPageName.startsWith('/') ? urlOrPageName : '/' + urlOrPageName)}${queryString || ''}`
-        }
-        if (window.__maloon__.lastRouteFetchSucessful) {
-            await loadLocalPage(urlOrPageName, queryString)
-        } else {
-            // Fallback: Normal page load
-            // @ts-expect-error
-            window.location = `${window.location.origin}${pageData.url || (urlOrPageName.startsWith('/') ? urlOrPageName : '/' + urlOrPageName)}${queryString || ''}`
-        }
-    } else {
-        pageData.pathname = urlOrPageName
-        loadActualPageBasedOnData(pageData, queryString, keepHistory)
-    }
-}
-
-/**
- * Use this function to navigate to a page (for example when a button was clicked)
- * @example navigate('index'); navigate('/my-page/234')
- * @param urlOrPageName The pagename / url to load
- * @param queryString The queryString to append to the url. Could be: ?key=value&x=1 If you'r page renders differently serverside based on this, directly include it into the first argument
- */
-export async function navigate (urlOrPageName: string, queryString?: string) {
-    await loadLocalPage(urlOrPageName, queryString || '', false)
-}
-
-/**
- * Use this function to navigate to a page which has to be fetched just in time,
- * for example if data might have changed or changes often.
- * NOTE: This will lead to a slower page load
- * @example freshNavigate('index'); freshNavigate('/my-page/234')
- */
-export async function freshNavigate(urlOrPageName: string, queryString?: string) {
-    if (urlOrPageName.startsWith('http') || urlOrPageName.startsWith(':') || urlOrPageName.startsWith('//')) {
-        // External site
-        // @ts-expect-error
-        window.location = urlOrPageName
-    }
-
-    queryString ||= ''
-    let pageData: { [key: string]: any } = {}
-
-    // Main Page
-    if (urlOrPageName === '' || urlOrPageName === '/') urlOrPageName = window.__maloon__.mainPage
-
-    window.__maloon__.currentPage = urlOrPageName
-
-    if (urlOrPageName in window.__maloon__.fetchedPages) {
-        urlOrPageName = window.__maloon__.fetchedPages[urlOrPageName].url || urlOrPageName
-    }
-
-    // Page not prefetched, doing now...
-    try {
-        await prefetchPage(urlOrPageName)
-    } catch {
-        // Fallback: Normal page load
-        // @ts-expect-error
-        window.location = `${window.location.origin}${pageData.url || (urlOrPageName.startsWith('/') ? urlOrPageName : '/' + urlOrPageName)}${queryString || ''}`
-    }
-    if (window.__maloon__.lastRouteFetchSucessful) {
-        await loadLocalPage(urlOrPageName, queryString)
-    } else {
-        // Fallback: Normal page load
-        // @ts-expect-error
-        window.location = `${window.location.origin}${pageData.url || (urlOrPageName.startsWith('/') ? urlOrPageName : '/' + urlOrPageName)}${queryString || ''}`
-    }
-}
-
-interface PageInfoO extends PageInfo {
-    /**
-     * Registers an event handler waiting for the page to close
-     * @param handler The event handler function
-     */
-    onclose (handler: Function): void
-}
-
-/**
- * Opens a page in a new tab
- * @param urlOrPageName Pagename / URL to open
- * @param queryString Query string to use (Supported but not recommended)
- * @returns {PageInfo} Page() return value of the opened page
- */
-export function open(urlOrPageName: string, queryString?: string): PageInfoO {
-    window.localStorage.setItem('__maloon_icbop__', 'true')
+function goToNonSameOriginPage (url: string) {
     saveState()
-    let url = urlOrPageName
-    if (urlOrPageName.startsWith('http') || urlOrPageName.startsWith(':') || urlOrPageName.startsWith('//')) {
-        // External site
-        url = urlOrPageName
+    // @ts-expect-error
+    window.location = url
+}
+
+async function accessLocalPage (rr: RegisteredRoute, fresh: boolean) {
+    if (fresh) {
+        // Load page again
+        await loadPageComponent(rr.path)
     } else {
-        // Internal site
-        queryString ||= ''
-        // Main Page
-        if (urlOrPageName === '' || urlOrPageName === '/') url = window.__maloon__.mainPage
-
-        if (urlOrPageName in window.__maloon__.fetchedPages) {
-            url = window.__maloon__.fetchedPages[urlOrPageName].url || urlOrPageName
+        // Check if page was already loaded
+        if (!wasPagePrefetched(rr.path)) {
+            // Load page
+            await loadPageComponent(rr.path)
         }
-
-        if (!url.startsWith('/')) url = `/${url}`
     }
 
-    const page = window.open(url)
-    let wclosedhandlers = []
+    // Update P() metadata
+    window.__maloon__.pagename = rr.name
+    window.__maloon__.pagepath = rr.path
 
-    const timer = setInterval(() => {
-        if (page.closed) {
-            clearInterval(timer)
-            for (const h of wclosedhandlers) {
-                h()
-            }
-            wclosedhandlers = []
-        }
-    }, 500)
+    // Update Page Component
+    onPageLoad()
+    window.__maloon__.CurrentPageComponent = rr.content
+}
 
-    let name: string
-    try {
-        name = page.__maloon__.getPageName()
-    } catch {
-        name = url
+/**
+ * Navigates to a different page / route
+ * @param page A page name, a page path or an absolute url to an external website
+ * @param queryString Here you can optionally provide a queryString
+ */
+async function navigate (page: string, queryString?: URLSearchParams | string | object) {
+    const qs = resolveQueryString(queryString)
+    if (page.startsWith(':') || page.startsWith('//') || page.startsWith('http')) {
+        return goToNonSameOriginPage(page)
+    }
+    const rr = resolvePageObject(page)
+    const path = rr.path + qs
+    await accessLocalPage(rr, false)
+    window.history.pushState({}, '', path)
+}
+
+/**
+ * Navigates to a different page / route and enforces a fresh component load. This can be useful when javascript is renderd on the server
+ * @param page A page name, a page path or an absolute url to an external website
+ * @param queryString Here you can optionally provide a queryString
+ */
+async function navigateFresh(page: string, queryString?: URLSearchParams | string | object) {
+    const qs = resolveQueryString(queryString)
+    if (page.startsWith(':') || page.startsWith('//') || page.startsWith('http')) {
+        return goToNonSameOriginPage(page)
+    }
+    const rr = resolvePageObject(page)
+    const path = rr.path + qs
+    await accessLocalPage(rr, true)
+    window.history.pushState({}, '', path)
+}
+
+/**
+ * Opens a new tab with the specified page / route
+ * @param page A page name, a page path or an absolute url to an external website
+ * @param queryString Here you can optionally provide a queryString
+ */
+function open (page: string, queryString?: URLSearchParams | string | object): PageInfo {
+    const qs = resolveQueryString(queryString)
+    let p: Window
+    let rr: undefined | RegisteredRoute
+    if (page.startsWith(':') || page.startsWith('//') || page.startsWith('http')) {
+        window.localStorage.setItem('__maloon_icbop__', 'true')
+        saveState()
+        p = window.open(page + qs)
+    } else {
+        rr = resolvePageObject(page)
+        window.localStorage.setItem('__maloon_icbop__', 'true')
+        saveState()
+        const path = rr.path + qs
+        
+        p = window.open(path)
     }
 
     return {
-        close () {
-            page.close()
-        },
-        isControlledByOtherPage () {
+        name: rr ? rr.name : page,
+        path: rr ? rr.path : page,
+        query: parseQueryString(qs),
+        close: p.close,
+        isControlledByOtherPage() {
             return true
         },
-        refresh () {
-            page.location = url
+        refresh() {
+            p.location = p.location.toString()
         },
-        name,
-        back () {
-            page.history.back()
-        },
-        forward () {
-            page.history.forward()
-        },
-        onclose(handler: Function) {
-            wclosedhandlers.push(handler)
-        }
+        back: p.history.back,
+        forward: p.history.forward
     }
 }
 
 interface PageInfo {
+    /**
+     * Name of the current page
+     */
+    name: string,
+    /**
+     * Path of the current page
+     */
+    path: string,
+    /**
+     * An object containing the parsed query string
+     */
+    query: ParsedQueryString,
     /**
      * Closes the current page, if it was opened by another page.
      * If not, silently does nothing
@@ -730,7 +211,6 @@ interface PageInfo {
      * @donotuse This shouldn't be used in most cases
      */
     refresh(): void,
-    name: string,
     /**
      * Navigates one step back. If not possible, silently does nothing
      */
@@ -741,51 +221,57 @@ interface PageInfo {
     forward(): void
 }
 
-window.__maloon__.getPageName()
-
-/**
- * Returns information and methods regarding the current page
- */
-export function Page (): PageInfo {
-    let name = 'index'
-    if (window.__maloon__.currentPage) {
-        if (name === 'index') name = window.location.pathname
-        if (determineCurrentPageBasedOnURLNoDefIndex(window.__maloon__.fetchedPages) === 'index') name = 'index'
-    } else {
-        name = determineCurrentPageBasedOnURL(window.__maloon__.fetchedPages)
-        if (name === 'index') name = window.location.pathname
-        if (determineCurrentPageBasedOnURLNoDefIndex(window.__maloon__.fetchedPages) === 'index') name = 'index'
-    }
+function P(): PageInfo {
     return {
-        close() {
-            if (Page().isControlledByOtherPage()) {
-                // Close page
+        name: window.__maloon__.pagename,
+        path: window.__maloon__.pagepath,
+        query: parseQueryString(window.location.search),
+        close () {
+            if (P().isControlledByOtherPage()) {
                 window.close()
             }
         },
         isControlledByOtherPage() {
             return window.__maloon__.icbop
         },
-        refresh() {
+        refresh () {
             // @ts-expect-error
             window.location = window.location.toString()
         },
-        name,
         back() {
             window.history.back()
         },
         forward() {
             window.history.forward()
-        }
+        },
     }
 }
 
+function onPageLoad () {
+    const _icbop = window.localStorage.getItem('__maloon_icbop__')
+    if (_icbop === 'true') {
+        window.__maloon__.icbop = true
+        window.localStorage.removeItem('__maloon_icbop__')
+    }
+}
+
+if (!window.__maloon__.popstateListenerInitialized) {
+    window.__maloon__.popstateListenerInitialized = true
+    window.addEventListener('popstate', () => {
+        accessLocalPage(resolvePageObject(window.location.pathname), false)
+    })
+}
+
+type StateCompatibleObject = {
+    [key: string]: StateCompatible
+}
+type StateCompatible = string | null | number | boolean | StateCompatible[] | StateCompatibleObject
 /**
  * Saves current state so that it can be recovered on reload. 
  * NOTE: This is done automatically when using open() or navigating to an external page.
  * NOTE2: State will only be saved for the current browser session
  */
-export function saveState () {
+export function saveState() {
     const serialized = JSON.stringify(window.__maloon__.state)
     localStorage.setItem('__maloon_state__', serialized)
 }
@@ -794,7 +280,7 @@ export function saveState () {
  * Loads stored state.
  * NOTE: This will be done automatically when using definePages()
  */
-export function loadState () {
+export function loadState() {
     const storage = window.localStorage.getItem('__maloon_state__')
     if (typeof storage === 'string') {
         const parsed = JSON.parse(storage)
@@ -803,7 +289,7 @@ export function loadState () {
     }
 }
 
-function clearSavedState () {
+function clearSavedState() {
     window.localStorage.removeItem('__maloon_state__')
 }
 
@@ -824,7 +310,7 @@ export function setState(key: string | number, value: StateCompatible) {
  * @returns {StateCompatible} Anything that is JSON serializable
  * @example getState('key')
  */
-export function getState (key: string | number): StateCompatible {
+export function getState(key: string | number): StateCompatible {
     return window.__maloon__.state[key.toString()]
 }
 
@@ -835,27 +321,44 @@ export const state = {
     load: loadState
 }
 
-/**
-* Navigates one step back. If not possible, silently does nothing
-*/
-export function goBack () {
-    Page().back()
+const initialPageLoadHandler = () => {
+    if (window.__maloon__.firstPageLoad === true) {
+        window.__maloon__.firstPageLoad = false
+        const { pathname } = window.location
+        try {
+            const rr = resolvePageObject(pathname)
+            accessLocalPage(rr, false)
+        } catch {
+            // Load 404 page
+            if (typeof window.__maloon__.notFoundRoute === 'function') {
+                accessLocalPage({
+                    contentFunc: window.__maloon__.notFoundRoute,
+                    name: '404',
+                    path: pathname
+                }, true)
+            } else {
+                // Load default 404 page
+                accessLocalPage({
+                    contentFunc: () => {
+                        return Default404Page
+                    },
+                    name: '404',
+                    path: pathname
+                }, true)
+            }
+        }
+    }
 }
-
-/**
-* Navigates one step forward. If not possible, silently does nothing
-*/
-export function goForward () {
-    Page().forward()
-}
-
-// Components
-import Link from './components/Link.svelte'
-import BackBtn from './components/BackBtn.svelte'
-import ForwardBtn from './components/ForwardBtn.svelte'
 
 export {
-    Link, 
-    BackBtn,
-    ForwardBtn
+    Router,
+    Route,
+    Page,
+    NotFound,
+    Prelaod,
+    Depends,
+    navigate,
+    navigateFresh,
+    open,
+    P
 }
