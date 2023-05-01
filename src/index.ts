@@ -68,7 +68,7 @@ async function loadPageComponent (nameOrPath: string): Promise<void> {
     const rr = resolvePageObject(nameOrPath)
     if (!rr) throw new Error('Couldn\'t find a registered page with the name or path of ' + nameOrPath)
    
-    const content = await rr.contentFunc()
+    const content = (await rr.contentFunc()).default
 
     window.__maloon__.routes[rr.path] = {
         name: rr.name,
@@ -331,19 +331,23 @@ const initialPageLoadHandler = async () => {
         } catch {
             // Load 404 page
             if (typeof window.__maloon__.notFoundRoute === 'function') {
+                registerRoute(window.__maloon__.notFoundRoute, '/__404__', '__404__')
                 await accessLocalPage({
                     contentFunc: window.__maloon__.notFoundRoute,
-                    name: '404',
-                    path: pathname
+                    name: '__404__',
+                    path: '/__404__'
                 }, true)
             } else {
                 // Load default 404 page
+                registerRoute(() => {
+                    return Default404Page
+                }, '/__404__', '__404__')
                 await accessLocalPage({
                     contentFunc: () => {
                         return Default404Page
                     },
-                    name: '404',
-                    path: pathname
+                    name: '__404__',
+                    path: '/__404__'
                 }, true)
             }
         }
