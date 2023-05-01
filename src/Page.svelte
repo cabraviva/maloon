@@ -1,9 +1,10 @@
 <script>
     window.__maloon__.routerInitialized()
+    const store = window.__maloon__.CurrentPageComponent
 </script>
 
 <main>
-    {#if $window.__maloon__.CurrentPageComponent}
-        <svelte:component this={$window.__maloon__.CurrentPageComponent}></svelte:component>
+    {#if $store}
+        <svelte:component this={$store}></svelte:component>
     {/if}
 </main>
