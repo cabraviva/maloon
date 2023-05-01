@@ -321,24 +321,24 @@ export const state = {
     load: loadState
 }
 
-const initialPageLoadHandler = () => {
+const initialPageLoadHandler = async () => {
     if (window.__maloon__.firstPageLoad === true) {
         window.__maloon__.firstPageLoad = false
         const { pathname } = window.location
         try {
             const rr = resolvePageObject(pathname)
-            accessLocalPage(rr, false)
+            await accessLocalPage(rr, false)
         } catch {
             // Load 404 page
             if (typeof window.__maloon__.notFoundRoute === 'function') {
-                accessLocalPage({
+                await accessLocalPage({
                     contentFunc: window.__maloon__.notFoundRoute,
                     name: '404',
                     path: pathname
                 }, true)
             } else {
                 // Load default 404 page
-                accessLocalPage({
+                await accessLocalPage({
                     contentFunc: () => {
                         return Default404Page
                     },
