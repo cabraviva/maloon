@@ -289,7 +289,7 @@ async function fetchPage (url: string, origin = '', retrieveInnerOfTag: Function
 
 function watchForMaloonHints () {
     if (typeof (IntersectionObserver) !== "undefined" && !wantsToSaveData()) {
-        const elementsWithHint = document.querySelectorAll('*[maloonhint]')
+        let elementsWithHint = document.querySelectorAll('*[maloonhint]')
         for (const ewh of elementsWithHint) {
             if (ewh.getAttribute('data-maloon-is-observed') !== 'true') {
                 ewh.setAttribute('data-maloon-is-observed', 'true')
@@ -298,6 +298,22 @@ function watchForMaloonHints () {
                         if (entry.isIntersecting) {
                             observer.unobserve(ewh)
                             prefetchPage(entry.target.getAttribute('maloonhint'), entry.target.getAttribute('maloonhint'))
+                        }
+                    })
+                })
+                observer.observe(ewh)
+            }
+        }
+
+        elementsWithHint = document.querySelectorAll('*[data-maloonhint]')
+        for (const ewh of elementsWithHint) {
+            if (ewh.getAttribute('data-maloon-is-observed') !== 'true') {
+                ewh.setAttribute('data-maloon-is-observed', 'true')
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            observer.unobserve(ewh)
+                            prefetchPage(entry.target.getAttribute('data-maloonhint'), entry.target.getAttribute('data-maloonhint'))
                         }
                     })
                 })
