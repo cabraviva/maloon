@@ -3,5 +3,7 @@
 </script>
 
 <main>
-    <svelte:component this={window.__maloon__.CurrentPageComponent}></svelte:component>
+    {#if $window.__maloon__.CurrentPageComponent}
+        <svelte:component this={$window.__maloon__.CurrentPageComponent}></svelte:component>
+    {/if}
 </main>

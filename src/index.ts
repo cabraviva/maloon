@@ -1,10 +1,11 @@
 // @ts-ignore
 import { wantsToSaveData, resolvePageObject, resolveQueryString, wasPagePrefetched, type ParsedQueryString, parseQueryString } from './utils.ts'
+import { writable } from 'svelte/store'
 
 declare global {
     interface Window {
         __maloon__: {
-            CurrentPageComponent: SvelteComponent | null,
+            CurrentPageComponent: any,
             registerRoute(content: Function, path: string, name: string): void,
             routes: {
                 [key: string]: RegisteredRoute
@@ -30,7 +31,7 @@ declare global {
 
 if (!window.__maloon__) {
     window.__maloon__ = {
-        CurrentPageComponent: null,
+        CurrentPageComponent: writable(null),
         registerRoute,
         routes: {},
         lpc: loadPageComponent,
@@ -111,7 +112,8 @@ async function accessLocalPage (rr: RegisteredRoute, fresh: boolean) {
 
     // Update Page Component
     onPageLoad()
-    window.__maloon__.CurrentPageComponent = rr.content
+    rr = resolvePageObject(rr.path)
+    window.__maloon__.CurrentPageComponent.set(rr.content)
 }
 
 /**
