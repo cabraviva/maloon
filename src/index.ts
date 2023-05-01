@@ -334,7 +334,7 @@ const initialPageLoadHandler = async () => {
             if (typeof window.__maloon__.notFoundRoute === 'function') {
                 registerRoute(window.__maloon__.notFoundRoute, '/__404__', '__404__')
                 const content = (await window.__maloon__.notFoundRoute()).default
-                window.__maloon__['/__404__'].content = content
+                window.__maloon__.routes['/__404__'].content = content
                 await accessLocalPage({
                     contentFunc: window.__maloon__.notFoundRoute,
                     content,
@@ -346,7 +346,7 @@ const initialPageLoadHandler = async () => {
                 registerRoute(() => {
                     return Default404Page
                 }, '/__404__', '__404__')
-                window.__maloon__['/__404__'].content = Default404Page
+                window.__maloon__.routes['/__404__'].content = Default404Page
                 await accessLocalPage({
                     contentFunc: () => {
                         return Default404Page

@@ -1,3 +1,6 @@
+<svelte:head>
+    <title>404 - Page not found</title>
+</svelte:head>
 <main>
     <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;text-align:center;">
         <h1>404 - Page not found</h1>
