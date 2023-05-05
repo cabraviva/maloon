@@ -77,7 +77,9 @@ export function parseQueryString (qs: string): ParsedQueryString {
             value = parseFloat(value)
         }
 
+        // deepcode ignore IncompatibleTypesInComparison: <please specify a reason of ignoring this>
         if (value === 'true') value = true
+        // deepcode ignore IncompatibleTypesInComparison: <please specify a reason of ignoring this>
         if (value === 'false') value = false
 
         parsed[key] = value

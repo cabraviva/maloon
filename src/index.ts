@@ -24,7 +24,13 @@ declare global {
             state: {
                 [key: string]: StateCompatible
             },
-            routerInitialized(): void
+            routerInitialized(): void,
+            navfn: {
+                navigate(page: string, queryString?: URLSearchParams | string | object): Promise<void>,
+                navigateFresh(page: string, queryString?: URLSearchParams | string | object): Promise<void>,
+                open(page: string, queryString?: URLSearchParams | string | object): PageInfo,
+                Page(): PageInfo
+            }
         }
     }
 }
@@ -46,7 +52,8 @@ if (!window.__maloon__) {
             loadState()
             onPageLoad()
             initialPageLoadHandler()
-        }
+        },
+        navfn: null
     }
 }
 
@@ -248,6 +255,15 @@ function P(): PageInfo {
     }
 }
 
+if (!window.__maloon__.navfn) {
+    window.__maloon__.navfn = {
+        navigate,
+        navigateFresh,
+        open,
+        Page: P
+    }
+}
+
 function onPageLoad () {
     const _icbop = window.localStorage.getItem('__maloon_icbop__')
     if (_icbop === 'true') {
@@ -366,9 +382,5 @@ export {
     Page,
     NotFound,
     Prelaod,
-    Depends,
-    navigate,
-    navigateFresh,
-    open,
-    P
+    Depends
 }
