@@ -172,8 +172,10 @@ function open (page: string, queryString?: URLSearchParams | string | object): P
     } else {
         rr = resolvePageObject(page)
         if (!rr) {
-            load404()
-            return null
+            // @ts-expect-error
+            rr = {
+                path: page
+            }
         }
         window.localStorage.setItem('__maloon_icbop__', 'true')
         saveState()
