@@ -84,5 +84,6 @@ export function parseQueryString (qs: string): ParsedQueryString {
 
         parsed[key] = value
     }
+    if (parsed[''] === 'undefined') delete parsed['']
     return parsed
 }
