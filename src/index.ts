@@ -90,7 +90,7 @@ import Router from './Router.svelte'
 import Route from './Route.svelte'
 import Page from './Page.svelte'
 import NotFound from './NotFound.svelte'
-import Prelaod from './Preload.svelte'
+import Preload from './Preload.svelte'
 import Depends from './Depends.svelte'
 import Default404Page from './Default404Page.svelte'
 
@@ -362,6 +362,6 @@ export {
     Route,
     Page,
     NotFound,
-    Prelaod,
+    Preload,
     Depends
 }
