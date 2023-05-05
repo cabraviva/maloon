@@ -288,7 +288,7 @@ type StateCompatible = string | null | number | boolean | StateCompatible[] | St
  * NOTE: This is done automatically when using open() or navigating to an external page.
  * NOTE2: State will only be saved for the current browser session
  */
-export function saveState() {
+function saveState() {
     const serialized = JSON.stringify(window.__maloon__.state)
     localStorage.setItem('__maloon_state__', serialized)
 }
@@ -297,7 +297,7 @@ export function saveState() {
  * Loads stored state.
  * NOTE: This will be done automatically when using definePages()
  */
-export function loadState() {
+function loadState() {
     const storage = window.localStorage.getItem('__maloon_state__')
     if (typeof storage === 'string') {
         const parsed = JSON.parse(storage)
@@ -308,34 +308,6 @@ export function loadState() {
 
 function clearSavedState() {
     window.localStorage.removeItem('__maloon_state__')
-}
-
-/**
- * Stores a value in the state
- * @param key Key for the data
- * @param value Whatever you want to save. Just make sure it's JSON serializabile
- * @example setState('key', 'value')
- */
-export function setState(key: string | number, value: StateCompatible) {
-    if (value === undefined) value = null
-    window.__maloon__.state[key.toString()] = value
-}
-
-/**
- * Retrieves some data from the state
- * @param key Key for the data
- * @returns {StateCompatible} Anything that is JSON serializable
- * @example getState('key')
- */
-export function getState(key: string | number): StateCompatible {
-    return window.__maloon__.state[key.toString()]
-}
-
-export const state = {
-    get: getState,
-    set: setState,
-    save: saveState,
-    load: loadState
 }
 
 const initialPageLoadHandler = async () => {
