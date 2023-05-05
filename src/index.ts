@@ -133,6 +133,7 @@ async function navigate (page: string, queryString?: URLSearchParams | string | 
         return goToNonSameOriginPage(page)
     }
     const rr = resolvePageObject(page)
+    if (!rr) return load404()
     const path = rr.path + qs
     await accessLocalPage(rr, false)
     window.history.pushState({}, '', path)
@@ -149,6 +150,7 @@ async function navigateFresh(page: string, queryString?: URLSearchParams | strin
         return goToNonSameOriginPage(page)
     }
     const rr = resolvePageObject(page)
+    if (!rr) return load404()
     const path = rr.path + qs
     await accessLocalPage(rr, true)
     window.history.pushState({}, '', path)
@@ -169,6 +171,10 @@ function open (page: string, queryString?: URLSearchParams | string | object): P
         p = window.open(page + qs)
     } else {
         rr = resolvePageObject(page)
+        if (!rr) {
+            load404()
+            return null
+        }
         window.localStorage.setItem('__maloon_icbop__', 'true')
         saveState()
         const path = rr.path + qs
@@ -310,6 +316,34 @@ function clearSavedState() {
     window.localStorage.removeItem('__maloon_state__')
 }
 
+async function load404 () {
+    if (typeof window.__maloon__.notFoundRoute === 'function') {
+        registerRoute(window.__maloon__.notFoundRoute, '/__404__', '__404__')
+        const content = (await window.__maloon__.notFoundRoute()).default
+        window.__maloon__.routes['/__404__'].content = content
+        await accessLocalPage({
+            contentFunc: window.__maloon__.notFoundRoute,
+            content,
+            name: '__404__',
+            path: '/__404__'
+        }, false)
+    } else {
+        // Load default 404 page
+        registerRoute(() => {
+            return Default404Page
+        }, '/__404__', '__404__')
+        window.__maloon__.routes['/__404__'].content = Default404Page
+        await accessLocalPage({
+            contentFunc: () => {
+                return Default404Page
+            },
+            content: Default404Page,
+            name: '__404__',
+            path: '/__404__'
+        }, false)
+    }
+}
+
 const initialPageLoadHandler = async () => {
     if (window.__maloon__.firstPageLoad === true) {
         window.__maloon__.firstPageLoad = false
@@ -318,32 +352,7 @@ const initialPageLoadHandler = async () => {
             const rr = resolvePageObject(pathname)
             await accessLocalPage(rr, false)
         } catch {
-            // Load 404 page
-            if (typeof window.__maloon__.notFoundRoute === 'function') {
-                registerRoute(window.__maloon__.notFoundRoute, '/__404__', '__404__')
-                const content = (await window.__maloon__.notFoundRoute()).default
-                window.__maloon__.routes['/__404__'].content = content
-                await accessLocalPage({
-                    contentFunc: window.__maloon__.notFoundRoute,
-                    content,
-                    name: '__404__',
-                    path: '/__404__'
-                }, false)
-            } else {
-                // Load default 404 page
-                registerRoute(() => {
-                    return Default404Page
-                }, '/__404__', '__404__')
-                window.__maloon__.routes['/__404__'].content = Default404Page
-                await accessLocalPage({
-                    contentFunc: () => {
-                        return Default404Page
-                    },
-                    content: Default404Page,
-                    name: '__404__',
-                    path: '/__404__'
-                }, false)
-            }
+            load404()
         }
     }
 }
