@@ -3,8 +3,6 @@
     const store = window.__maloon__.CurrentPageComponent
 </script>
 
-<main>
-    {#if $store}
-        <svelte:component this={$store}></svelte:component>
-    {/if}
-</main>
+{#if $store}
+    <svelte:component this={$store}></svelte:component>
+{/if}

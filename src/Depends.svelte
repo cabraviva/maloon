@@ -26,8 +26,6 @@
     }
 </script>
 
-<main>
-    <div bind:this={element}>
-        <slot></slot>
-    </div>
-</main>
+<div bind:this={element}>
+    <slot></slot>
+</div>
