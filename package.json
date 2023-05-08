@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "description": "Create Svelte SPAs easily & ship less javascript 💨",
   "svelte": "src/index.ts",
-  "main": "dist/index.jss",
+  "main": "dist/index.js",
   "type": "module",
   "types": "dist/index.d.ts",
   "scripts": {
